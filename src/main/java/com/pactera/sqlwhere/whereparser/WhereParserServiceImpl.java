@@ -1,8 +1,12 @@
 package com.pactera.sqlwhere.whereparser;
 
 import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -20,7 +24,7 @@ import net.sf.jsqlparser.statement.select.Select;
 @Service
 public class WhereParserServiceImpl {
 	
-	private boolean isNumber(String expr) {
+	public boolean isNumber(String expr) {
 		expr=expr==null?"":expr;
 		String regEx3 = "\\d{1,}\\.{0,1}\\d{0,}";
 		Pattern pattern3 = Pattern.compile(regEx3);
@@ -30,7 +34,7 @@ public class WhereParserServiceImpl {
 		return rs3;
 	}
 	
-	private boolean isVarchar(String expr) {
+	public boolean isVarchar(String expr) {
 		expr=expr==null?"":expr;
 		String regEx4 = "'{1,}(.){0,}'{1,}";
 		Pattern pattern4 = Pattern.compile(regEx4);
@@ -47,7 +51,7 @@ public class WhereParserServiceImpl {
 	 * @param colExpressHasFunc
 	 * @return
 	 */
-	private String matchExtractFunction(String colExpressHasFunc){
+	public String matchExtractFunction(String colExpressHasFunc){
 		String regEx = "(?i)\\w{1,}[(](.){1,}[)]\\s{0,}(as){0,}\\s{0,}\\w{0,}";
 		Pattern pattern = Pattern.compile(regEx);
 		Matcher matcher = pattern.matcher(colExpressHasFunc);
@@ -102,7 +106,7 @@ public class WhereParserServiceImpl {
 	 * @param colExpress
 	 * @return
 	 */
-	private Set<String> matchExtractCaseWhen(String colExpress){
+	public Set<String> matchExtractCaseWhen(String colExpress){
 		//List<String> result=new ArrayList<String>();
 		Set<String> result=new HashSet<String>();
 		
@@ -326,11 +330,11 @@ public class WhereParserServiceImpl {
 	
 	//从case when表达式中提取“表名.字段名”或“表别名.字段名”或“字段名”表达式
 	//从完整SQL中根据“表别名.字段名”提取“表名.字段名”，遇到子查询需要无限向下递归寻找，找到源头“表名.字段名”
-	public void test() {
+	public void test(String statement) {
 		//String whereClause = "a=3 AND b=4 AND c=5";
 		String whereClause = null;
 		//String statement = "SELECT case when a=1 then a else 0 end a,b,c FROM mytable t1 WHERE t1.col = 9 and b=c LIMIT 3, ?";
-		String statement="select t.* from P_BLOOD_RELATIONSHIP_ERROR t where case when t.sql_number=0 then '1' else '2' end='2' AND decode(t.FILTRAT_ID,'hello') = 'DATA_SOURCE_ID'";
+		//String statement="select t.* from P_BLOOD_RELATIONSHIP_ERROR t where case when t.sql_number=0 then '1' else '2' end='2' AND decode(t.FILTRAT_ID,'hello') = 'DATA_SOURCE_ID'";
 		
 		CCJSqlParserManager parserManager = new CCJSqlParserManager();
 		Select select=null;
@@ -346,65 +350,10 @@ public class WhereParserServiceImpl {
 		Expression expr=null;
 		try {
 			expr = CCJSqlParserUtil.parseCondExpression(whereClause);
-			expr.accept(new ExpressionVisitorAdapter() {
-				public void visit(AndExpression expr) {
-				    if (expr.getLeftExpression() instanceof AndExpression) {
-				        expr.getLeftExpression().accept(this);
-				    } else if ((expr.getLeftExpression() instanceof EqualsTo)){
-				        expr.getLeftExpression().accept(this);
-				        //System.out.println(expr.getLeftExpression());
-				    }
-				    expr.getRightExpression().accept(this);
-				    //System.out.println(expr.getRightExpression());
-				}
-				public void visit(EqualsTo expr) {
-					WhereParserServiceImpl whereImpl=new WhereParserServiceImpl();
-				    System.out.println("解析前-左:"+expr.getLeftExpression());
-				    Set<String> whereLeftItems=whereImpl.matchExtractCaseWhen(expr.getLeftExpression().toString());
-				    Iterator<String> it=whereLeftItems.iterator();
-				    while(it.hasNext()) {
-				    	String resultItm=it.next();
-				    	resultItm=whereImpl.matchExtractFunction(resultItm);
-				    	boolean isNumber=whereImpl.isNumber(resultItm);
-				    	boolean isVarchar=whereImpl.isVarchar(resultItm);
-				    	boolean isColumn=!isNumber && !isVarchar;
-				    	
-				    	String type=null;
-				    	if(isNumber) {
-				    		type="数字常量";
-				    	}else if(isVarchar) {
-				    		type="字符常量";
-				    	}else if(isColumn) {
-				    		type="字段";
-				    	}
-				    	
-				    	System.out.println("解析后-左："+resultItm+",type:"+type);
-				    }
-				    //System.out.println("比较符:"+expr.getStringExpression());
-				    System.out.println("解析前-右:"+expr.getRightExpression());
-				    Set<String> whereRightItems=whereImpl.matchExtractCaseWhen(expr.getRightExpression().toString());
-				    Iterator<String> it2=whereRightItems.iterator();
-				    while(it2.hasNext()) {
-				    	String resultItm=it2.next();
-				    	resultItm=whereImpl.matchExtractFunction(resultItm);
-				    	
-				    	boolean isNumber=whereImpl.isNumber(resultItm);
-				    	boolean isVarchar=whereImpl.isVarchar(resultItm);
-				    	boolean isColumn=!isNumber && !isVarchar;
-				    	
-				    	String type=null;
-				    	if(isNumber) {
-				    		type="数字常量";
-				    	}else if(isVarchar) {
-				    		type="字符常量";
-				    	}else if(isColumn) {
-				    		type="字段";
-				    	}
-				    	
-				    	System.out.println("解析后-右："+resultItm+",type:"+type);
-				    }
-				}
-			});
+			//ExpressionVisitorAdapter adapter=new ExpressionVisitorAdapter() {};
+			MyExpressionVisitorAdapter adapter=new MyExpressionVisitorAdapter();
+			expr.accept(adapter);
+			System.out.println("WHERE血缘结果："+adapter.callBackResult());
 		} catch (JSQLParserException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -413,7 +362,7 @@ public class WhereParserServiceImpl {
 	
 	public static void main(String[] args) {
 		WhereParserServiceImpl impl=new WhereParserServiceImpl();
-		impl.test();
+		impl.test("select t.* from P_BLOOD_RELATIONSHIP_ERROR t where case when t.sql_number=0 then '1' else '2' end='2' AND decode(t.FILTRAT_ID,'hello') = 'DATA_SOURCE_ID'");
 	}
 	
 }
